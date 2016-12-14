@@ -1,39 +1,36 @@
 package main
 
 import (
+	"log"
 	"net/http"
 
-	"github.com/gorilla/websocket"
-	"fmt"
+	r "github.com/dancannon/gorethink"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true },
-}
-
 func main() {
-	http.HandleFunc("/", handler)
-	http.ListenAndServe(":4000", nil)
-}
+	session, err := r.Connect(r.ConnectOpts{
+		Address:  "localhost:28015",
+		Database: "rtsupport",
+	})
 
-func handler(w http.ResponseWriter, r *http.Request) {
-	socket, err := upgrader.Upgrade(w, r, nil)
-    if err != nil {
-        fmt.Println(err)
-        return
-    }
-    for {
-		msgType, msg, err := socket.ReadMessage()
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		fmt.Println(string(msg))
-		if err = socket.WriteMessage(msgType, msg); err != nil {
-			fmt.Println(err)
-			return
-		}
+	if err != nil {
+		log.Panic(err.Error())
 	}
+
+	router := NewRouter(session)
+
+	router.Handle("channel add", addChannel)
+	router.Handle("channel subscribe", subscribeChannel)
+	router.Handle("channel unsubscribe", unsubscribeChannel)
+
+	router.Handle("user edit", editUser)
+	router.Handle("user subscribe", subscribeUser)
+	router.Handle("user unsubscribe", unsubscribeUser)
+
+	router.Handle("message add", addChannelMessage)
+	router.Handle("message subscribe", subscribeChannelMessage)
+	router.Handle("message unsubscribe", unsubscribeChannelMessage)
+
+	http.Handle("/", router)
+	http.ListenAndServe(":4000", nil)
 }
